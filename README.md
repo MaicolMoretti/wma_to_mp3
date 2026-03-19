@@ -3,11 +3,12 @@
 Un'applicazione desktop nativa per macOS, pronta all'uso, per convertire file Windows Media Audio (.wma) in formato MP3 utilizzando un binario statico `ffmpeg` integrato. Sviluppata con SwiftUI e Swift Package Manager per macOS 14+.
 
 ## Caratteristiche
-- **Interfaccia Semplicissima**: Trascina i file `.wma` direttamente nella finestra dell'app.
-- **Elaborazione Batch**: Converti più file contemporaneamente (limitato dai core della CPU attivi).
-- **Conversione in Background**: L'interfaccia rimane fluida e non si blocca mai durante la conversione.
+- **Dashboard Intuitiva**: Scegli facilmente tra conversione audio o editing video all'avvio.
+- **Convertitore WMA to MP3**: Trascina i file `.wma` direttamente nella finestra dell'app per una conversione batch ultra-veloce.
+- **Editor Video (Novità)**: Funzionalità di editing video integrata (in continuo sviluppo).
+- **Elaborazione Batch**: Converti più file contemporaneamente.
+- **Background Conversion**: L'interfaccia rimane fluida e non si blocca mai durante la conversione.
 - **Controllo della Qualità**: Qualità di output personalizzabili (128, 192, 256, 320 kbps).
-- **Gestione degli Errori Robusta**: Gestisce file corrotti, file da zero byte e nomi di file identici in modo fluido (aggiungendo automaticamente `_1`, `_2`).
 - **Metadati**: Preserva automaticamente i tag ID3.
 
 ## Requisiti

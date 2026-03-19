@@ -16,7 +16,7 @@ struct WMA2MP3App: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            HomeView()
                 .environment(manager)
         }
         .commands {
