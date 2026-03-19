@@ -1,0 +1,7 @@
+.DS_Store
+.build/
+.vscode/
+build/
+*.app/
+ffmpeg
+WMA2MP3.zip
