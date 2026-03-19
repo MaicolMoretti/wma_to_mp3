@@ -49,6 +49,7 @@ app_bundle:
 	cp -R $(BUILD_DIR)/release/$(EXECUTABLE_NAME)_$(EXECUTABLE_NAME).bundle $(RESOURCES_DIR)/ 2>/dev/null || true
 	# Alternatively just copy the raw resources just in case SPM doesn't bundle them directly like xcodebuild does
 	cp $(FFMPEG_BIN) $(RESOURCES_DIR)/ffmpeg
+	cp Sources/WMA2MP3/Resources/AppIcon.icns $(RESOURCES_DIR)/AppIcon.icns
 	
 	# Create empty PkgInfo
 	echo "APPL????" > $(CONTENTS)/PkgInfo
