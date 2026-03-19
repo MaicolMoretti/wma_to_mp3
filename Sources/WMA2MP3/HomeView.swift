@@ -205,8 +205,3 @@ struct VideoEditView: View {
         .background(Color.orange.opacity(0.05))
     }
 }
-
-#Preview {
-    HomeView()
-        .environment(ConversionManager())
-}
