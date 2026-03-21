@@ -50,7 +50,7 @@ struct ContentView: View {
                 .background(isTargeted ? Color.accentColor.opacity(0.1) : Color.clear)
         )
         .padding(40)
-        .onDrop(of: [.audio, .fileURL], isTargeted: $isTargeted) { providers in
+        .onDrop(of: [.item, .fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
         }
     }
@@ -81,7 +81,7 @@ struct ContentView: View {
             }
             .width(24)
         }
-        .onDrop(of: [.audio, .fileURL], isTargeted: $isTargeted) { providers in
+        .onDrop(of: [.item, .fileURL], isTargeted: $isTargeted) { providers in
             handleDrop(providers: providers)
         }
     }
@@ -163,9 +163,18 @@ struct ContentView: View {
     // MARK: - Actions
     
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        let supportedExtensions = ["wma", "mp3", "m4a", "wav", "aac", "flac"]
         for provider in providers {
-            _ = provider.loadObject(ofClass: URL.self) { url, error in
-                if let url = url, url.pathExtension.lowercased() == "wma" {
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, error in
+                guard let data = data,
+                      let path = NSString(data: data, encoding: 4),
+                      let url = URL(string: path as String) else {
+                    if let error = error {
+                        print("Drop error: \(error)")
+                    }
+                    return
+                }
+                if supportedExtensions.contains(url.pathExtension.lowercased()) {
                     Task { @MainActor in
                         manager.addFile(url)
                     }
@@ -180,11 +189,18 @@ struct ContentView: View {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
-        panel.allowedContentTypes = [UTType("com.microsoft.windows-media-wma") ?? .audio]
+        panel.allowedContentTypes = [
+            UTType("com.microsoft.windows-media-wma") ?? .audio,
+            .mp3,
+            .mpeg4Audio,
+            .wav,
+            UTType.audio
+        ]
         
+        let supportedExtensions = ["wma", "mp3", "m4a", "wav", "aac", "flac"]
         if panel.runModal() == .OK {
             for url in panel.urls {
-                if url.pathExtension.lowercased() == "wma" {
+                if supportedExtensions.contains(url.pathExtension.lowercased()) {
                     manager.addFile(url)
                 }
             }
