@@ -1,6 +1,6 @@
 # Convertitore da WMA a MP3
 
-Un'applicazione desktop nativa per macOS, pronta all'uso, per convertire file Windows Media Audio (.wma) in formato MP3 utilizzando un binario statico `ffmpeg` integrato. Sviluppata con SwiftUI e Swift Package Manager per macOS 14+.
+Un'applicazione desktop nativa per macOS, pronta all'uso, per convertire file Windows Media Audio (.wma) in formato MP3 utilizzando  `ffmpeg`. Sviluppata con SwiftUI e Swift Package Manager per macOS 14+.
 
 ## Caratteristiche
 - **Dashboard Intuitiva**: Scegli facilmente tra conversione audio o editing video all'avvio.
