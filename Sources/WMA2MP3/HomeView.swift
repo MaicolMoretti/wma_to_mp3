@@ -27,13 +27,15 @@ struct HomeView: View {
             case .wmaToMp3:
                 wmaToMp3View
             case .editVideo:
-                editVideoView
+                VideoEditView(onBack: { currentSection = .home })
             }
         }
-        .frame(minWidth: 600, minHeight: 450)
+        .frame(minWidth: 700, minHeight: 500)
         .animation(.spring(), value: currentSection)
     }
-    
+}
+
+extension HomeView {
     private var mainSelectionMenu: some View {
         VStack(spacing: 30) {
             Text("Benvenuto in WMA2MP3")
@@ -71,57 +73,26 @@ struct HomeView: View {
     
     private var wmaToMp3View: some View {
         VStack(spacing: 0) {
-            HStack {
-                Button {
-                    currentSection = .home
-                } label: {
-                    Label("Indietro", systemImage: "chevron.left")
-                }
-                .buttonStyle(.plain)
-                .padding()
-                
-                Spacer()
-                
-                Text("Convertitore WMA to MP3")
-                    .font(.headline)
-                    .padding()
-                
-                Spacer()
-                
-                // Placeholder to balance the back button
-                Color.clear.frame(width: 60)
-            }
-            .background(.ultraThinMaterial)
-            
+            header(title: "Convertitore WMA to MP3", onBack: { currentSection = .home })
             ContentView()
         }
     }
     
-    private var editVideoView: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button {
-                    currentSection = .home
-                } label: {
-                    Label("Indietro", systemImage: "chevron.left")
-                }
-                .buttonStyle(.plain)
-                .padding()
-                
-                Spacer()
-                
-                Text("Editor Video")
-                    .font(.headline)
-                    .padding()
-                
-                Spacer()
-                
-                Color.clear.frame(width: 60)
+    private func header(title: String, onBack: @escaping () -> Void) -> some View {
+        HStack {
+            Button(action: onBack) {
+                Label("Indietro", systemImage: "chevron.left")
             }
-            .background(.ultraThinMaterial)
+            .buttonStyle(.plain)
+            .padding()
             
-            VideoEditView()
+            Spacer()
+            Text(title).font(.headline).padding()
+            Spacer()
+            
+            Color.clear.frame(width: 60)
         }
+        .background(.ultraThinMaterial)
     }
 }
 
@@ -181,19 +152,36 @@ struct VideoEditView: View {
     @State private var segManager = VideoSegmentationManager()
     @State private var isTargeted = false
     @State private var selectedVideoURL: URL?
+    var onBack: () -> Void
     
     var body: some View {
-        VStack(spacing: 20) {
-            if let videoURL = selectedVideoURL {
-                processingView(for: videoURL)
-            } else {
-                dropZone
+        VStack(spacing: 0) {
+            HStack {
+                Button(action: onBack) {
+                    Label("Indietro", systemImage: "chevron.left")
+                }
+                .buttonStyle(.plain)
+                .padding()
+                
+                Spacer()
+                Text("Editor Video").font(.headline).padding()
+                Spacer()
+                Color.clear.frame(width: 60)
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.orange.opacity(0.05))
-        .onDrop(of: [.item, .fileURL], isTargeted: $isTargeted) { providers in
-            handleDrop(providers: providers)
+            .background(.ultraThinMaterial)
+            
+            VStack(spacing: 20) {
+                if let videoURL = selectedVideoURL {
+                    processingView(for: videoURL)
+                } else {
+                    dropZone
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.orange.opacity(0.05))
+            .onDrop(of: [.item, .fileURL], isTargeted: $isTargeted) { providers in
+                handleDrop(providers: providers)
+            }
         }
     }
     
@@ -205,7 +193,7 @@ struct VideoEditView: View {
                 .foregroundColor(isTargeted ? .accentColor : .orange)
             
             Text("Segmentazione Video Automatica")
-                .font(.title)
+                .font(.title2)
                 .bold()
             
             Text("Trascina qui un video (.mp4, .mov)")
@@ -223,16 +211,23 @@ struct VideoEditView: View {
                 .foregroundColor(.secondary)
                 .padding(.top, 10)
         }
+        .padding(40)
+        .background(
+            RoundedRectangle(cornerRadius: 30)
+                .stroke(isTargeted ? Color.accentColor : Color.orange.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [10]))
+        )
+        .padding(40)
     }
     
     @ViewBuilder
     private func processingView(for url: URL) -> some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             HStack {
                 Image(systemName: "video.fill")
                     .foregroundColor(.orange)
                 Text(url.lastPathComponent)
                     .font(.headline)
+                    .lineLimit(1)
                 Spacer()
                 if case .completed = segManager.state {
                     Button("Chiudi") {
@@ -243,114 +238,19 @@ struct VideoEditView: View {
                 }
             }
             .padding()
-            .background(.ultraThinMaterial)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.5))
             .cornerRadius(12)
             
-            VStack(alignment: .leading, spacing: 12) {
-                switch segManager.state {
-                case .idle:
-                    Button("Avvia Segmentazione") {
-                        Task {
-                            await segManager.processVideo(url: url)
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                    .frame(maxWidth: .infinity)
-                    
-                case .scanning(let progress):
-                    VStack(alignment: .leading, spacing: 12) {
-                        ProgressSection(title: "Scansione fotogrammi...", progress: progress, icon: "magnifyingglass")
-                        
-                        if segManager.estimatedTotalSeconds > 0 {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: "clock")
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
-                                    Text("Tempo stimato")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Spacer()
-                                    Text("\(VideoSegmentationManager.formatDuration(segManager.elapsedSeconds)) / ~\(VideoSegmentationManager.formatDuration(segManager.estimatedTotalSeconds))")
-                                        .font(.caption.monospacedDigit())
-                                        .foregroundColor(.secondary)
-                                }
-                                let timeProgress = segManager.estimatedTotalSeconds > 0
-                                    ? min(segManager.elapsedSeconds / segManager.estimatedTotalSeconds, 1.0)
-                                    : 0.0
-                                ProgressView(value: timeProgress)
-                                    .progressViewStyle(.linear)
-                                    .tint(.orange.opacity(0.6))
-                            }
-                        }
-                        
-                        Text(segManager.statusMessage)
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                    
-                case .cutting(let progress):
-                    VStack(spacing: 8) {
-                        ProgressSection(title: "Taglio segmenti con FFmpeg...", progress: progress, icon: "scissors")
-                        Text(segManager.statusMessage)
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                    }
-                    
-                case .completed(let count):
-                    VStack(spacing: 16) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(.green)
-                        Text("Operazione Completata!")
-                            .font(.title2).bold()
-                        Text("Sono stati generati \(count) file nel percorso originale.")
-                            .foregroundColor(.secondary)
-                        
-                        Button("Mostra nel Finder") {
-                            NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
-                        }
-                        .buttonStyle(.link)
-                    }
-                    .padding()
-                    
-                case .error(let message):
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 48))
-                            .foregroundColor(.red)
-                        Text("Errore nella segmentazione")
-                            .font(.title2).bold()
-                        Text(message)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                        
-                        Button("Riprova") {
-                            segManager.reset()
-                            Task {
-                                await segManager.processVideo(url: url)
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                }
+            VStack(spacing: 20) {
+                statusSection(for: url)
             }
-            .padding(30)
+            .padding(24)
             .background(Color(NSColor.windowBackgroundColor))
             .cornerRadius(20)
-            .shadow(color: .black.opacity(0.1), radius: 10)
+            .shadow(color: .black.opacity(0.05), radius: 10)
             
             if !segManager.log.isEmpty {
-                ScrollView {
-                    Text(segManager.log)
-                        .font(.system(.caption, design: .monospaced))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                }
-                .frame(height: 120)
-                .background(Color.black.opacity(0.05))
-                .cornerRadius(8)
+                logView
             }
             
             Spacer()
@@ -358,19 +258,113 @@ struct VideoEditView: View {
         .padding()
     }
     
+    @ViewBuilder
+    private func statusSection(for url: URL) -> some View {
+        switch segManager.state {
+        case .idle:
+            Button("Avvia Analisi e Taglio") {
+                Task { await segManager.processVideo(url: url) }
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .controlSize(.large)
+            
+        case .scanning(let progress):
+            ProgressSection(title: "Analisi video...", progress: progress, icon: "magnifyingglass")
+            timerInfo
+            statusMessage
+            
+        case .cutting(let progress):
+            ProgressSection(title: "Esportazione capitoli...", progress: progress, icon: "scissors")
+            statusMessage
+            
+        case .completed(let count):
+            completionView(count: count, url: url)
+            
+        case .error(let message):
+            errorView(message: message, url: url)
+        }
+    }
+    
+    private var timerInfo: some View {
+        Group {
+            if segManager.estimatedTotalSeconds > 0 {
+                HStack {
+                    Image(systemName: "clock")
+                    Text("Tempo stimato: \(VideoSegmentationManager.formatDuration(segManager.elapsedSeconds)) / ~\(VideoSegmentationManager.formatDuration(segManager.estimatedTotalSeconds))")
+                }
+                .font(.caption.monospacedDigit())
+                .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private var statusMessage: some View {
+        Text(segManager.statusMessage)
+            .font(.caption)
+            .foregroundColor(.orange)
+            .bold()
+            .multilineTextAlignment(.center)
+    }
+    
+    private func completionView(count: Int, url: URL) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.largeTitle)
+                .foregroundColor(.green)
+            Text("Completato!").font(.headline)
+            Text("Creati \(count) video nella cartella originale.")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            Button("Mostra nel Finder") {
+                NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+            }
+            .buttonStyle(.link)
+        }
+    }
+    
+    private func errorView(message: String, url: URL) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "xmark.octagon.fill")
+                .font(.largeTitle)
+                .foregroundColor(.red)
+            Text("Errore").font(.headline)
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            
+            Button("Riprova") {
+                segManager.reset()
+                Task { await segManager.processVideo(url: url) }
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+    
+    private var logView: some View {
+        ScrollView {
+            Text(segManager.log)
+                .font(.system(.caption2, design: .monospaced))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(8)
+        }
+        .frame(height: 100)
+        .background(Color.black.opacity(0.05))
+        .cornerRadius(8)
+    }
+    
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         for provider in providers {
-            provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, error in
+            provider.loadDataRepresentation(forTypeIdentifier: UTType.fileURL.identifier) { data, _ in
                 guard let data = data,
                       let path = NSString(data: data, encoding: 4),
-                      let url = URL(string: path as String) else {
-                    if let error = error {
-                        print("Drop error: \(error)")
-                    }
-                    return
-                }
+                      let url = URL(string: path as String) else { return }
+                
                 let ext = url.pathExtension.lowercased()
-                if ["mp4", "mov", "m4v", "avi", "mkv"].contains(ext) {
+                let validExts = ["mp4", "mov", "m4v", "avi", "mkv"]
+                if validExts.contains(ext) {
                     Task { @MainActor in
                         self.selectedVideoURL = url
                     }
@@ -382,11 +376,7 @@ struct VideoEditView: View {
     
     private func selectVideo() {
         let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
         panel.allowedContentTypes = [.movie, .video]
-        
         if panel.runModal() == .OK {
             self.selectedVideoURL = panel.url
         }

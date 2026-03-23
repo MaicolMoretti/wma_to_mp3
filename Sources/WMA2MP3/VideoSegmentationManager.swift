@@ -3,18 +3,24 @@ import AVFoundation
 import SwiftUI
 import Observation
 
-/// Semaforo asincrono per controllare il parallelismo nelle TaskGroup.
+/// Semaforo asincrono robusto per controllare il parallelismo.
 actor AsyncSemaphore {
     private var count: Int
     private var waiters: [CheckedContinuation<Void, Never>] = []
+    
     init(limit: Int) { count = limit }
+    
     func wait() async {
-        if count > 0 { count -= 1; return }
+        if count > 0 {
+            count -= 1
+            return
+        }
         await withCheckedContinuation { waiters.append($0) }
     }
+    
     func signal() {
-        if let next = waiters.first {
-            waiters.removeFirst()
+        if !waiters.isEmpty {
+            let next = waiters.removeFirst()
             next.resume()
         } else {
             count += 1
@@ -199,14 +205,13 @@ final class VideoSegmentationManager {
         return "\(s / 60)m \(s % 60)s"
     }
 
-    /// Taglia il video in segmenti usando ffmpeg.
+    /// Taglia il video in segmenti usando ffmpeg in modo sicuro.
     private func cutSegments(sourceURL: URL, segments: [(start: Double, end: Double)]) async {
-        // Cerca ffmpeg nelle risorse del bundle o in path comuni
         let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) ?? "/usr/local/bin/ffmpeg"
         
-        if !FileManager.default.fileExists(atPath: ffmpegPath) {
+        guard FileManager.default.fileExists(atPath: ffmpegPath) else {
             await MainActor.run {
-                self.state = .error("Componente FFmpeg non trovato in \(ffmpegPath)")
+                self.state = .error("Componente FFmpeg non trovato.")
             }
             return
         }
@@ -220,6 +225,7 @@ final class VideoSegmentationManager {
             let outputName = "\(filenameBase)_part\(partNumber).mp4"
             let outputURL = directory.appendingPathComponent(outputName)
             
+            // Rimozione sicura del file esistente
             if fileManager.fileExists(atPath: outputURL.path) {
                 try? fileManager.removeItem(at: outputURL)
             }
@@ -230,15 +236,15 @@ final class VideoSegmentationManager {
             
             await MainActor.run {
                 self.state = .cutting(progress: Double(partNumber) / Double(segments.count))
-                self.statusMessage = "Taglio in corso: Parte \(partNumber) di \(segments.count)..."
-                self.log += "Esportazione parte \(partNumber)... (\(startTimeStr)s)\n"
+                self.statusMessage = "Taglio parte \(partNumber) di \(segments.count)..."
+                self.log += "Esportazione parte \(partNumber) (\(startTimeStr)s)...\n"
             }
             
             let process = Process()
             process.executableURL = URL(fileURLWithPath: ffmpegPath)
+            // Sicurezza: Argomenti passati come array evitando shell injection
             process.arguments = [
-                "-y",
-                "-threads", "0",   // Usa tutti i core CPU disponibili
+                "-y", "-threads", "0",
                 "-ss", startTimeStr,
                 "-t", durationStr,
                 "-i", sourceURL.path,
@@ -253,20 +259,20 @@ final class VideoSegmentationManager {
             do {
                 try process.run()
                 
-                var updateCounter = 0
+                // Timeout di sicurezza: 10 minuti per segmento
+                let timeoutTask = Task {
+                    try? await Task.sleep(nanoseconds: 600 * 1_000_000_000)
+                    if process.isRunning {
+                        process.terminate()
+                    }
+                }
+                
                 for try await line in pipe.fileHandleForReading.bytes.lines {
                     let logLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !logLine.isEmpty else { continue }
                     
-                    updateCounter += 1
-                    // Non loggare ogni singola riga di frame= se sono troppe, ma diamo feedback
-                    if logLine.starts(with: "frame=") || logLine.starts(with: "size=") {
-                        if updateCounter % 20 == 0 {
-                            await MainActor.run {
-                                self.statusMessage = "Taglio parte \(partNumber): \(logLine)"
-                            }
-                        }
-                        if updateCounter % 5 != 0 { continue }
+                    if logLine.contains("frame=") || logLine.contains("size=") {
+                        continue // Non intasiamo il log con progressi tecnici
                     }
                     
                     await MainActor.run {
@@ -278,10 +284,14 @@ final class VideoSegmentationManager {
                 }
                 
                 process.waitUntilExit()
+                timeoutTask.cancel()
+                
+                if process.terminationStatus != 0 {
+                    print("FFmpeg error status: \(process.terminationStatus)")
+                }
             } catch {
-                print("FFmpeg error: \(error)")
                 await MainActor.run {
-                    self.log += "Errore FFmpeg: \(error.localizedDescription)\n"
+                    self.log += "Errore processo: \(error.localizedDescription)\n"
                 }
             }
         }

@@ -13,16 +13,13 @@ struct VideoAnalyzer {
         // Hue range blu: 160°-270° copre blu navy, blu medio e un po' di cyan
         static let minHue: CGFloat = 160.0 / 360.0
         static let maxHue: CGFloat = 270.0 / 360.0
-        // Saturazione bassa per includere anche i blu più desaturati/scuri
         static let minSaturation: CGFloat = 0.15
-        // Value bassa per includere i blu molto scuri (navy/notte)
         static let minValue: CGFloat = 0.10
         
-        // Soglia al 25%: la schermata ha elementi decorativi non-blu (logo, cerchi)
-        static let bluePixelPercentage: Double = 0.25
+        // Soglia alzata al 45%: con il fix BGR->RGB siamo più precisi, possiamo essere più selettivi.
+        static let bluePixelPercentage: Double = 0.45
         
-        // Luminosità minima per il testo bianco centrale (scesa a 0.55 perché col downscaling
-        // il testo sottile sfuma col blu diventando grigio chiaro invece che bianco)
+        // Luminosità minima per il testo bianco centrale
         static let whiteTextBrightness: CGFloat = 0.55
     }
 
@@ -34,6 +31,8 @@ struct VideoAnalyzer {
         let width = image.width
         let height = image.height
         let bytesPerRow = width * 4
+        
+        // Uso un buffer di pixel singolo per ridurre le allocazioni
         var pixelData = [UInt8](repeating: 0, count: height * bytesPerRow)
         
         guard let context = CGContext(
@@ -43,7 +42,7 @@ struct VideoAnalyzer {
             bitsPerComponent: 8,
             bytesPerRow: bytesPerRow,
             space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue // garantisce RGBA
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
         
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
@@ -56,38 +55,69 @@ struct VideoAnalyzer {
             return false
         }
         
-        var bluePixels = 0
+        var totalBluePixels = 0
+        var topBluePixels = 0
+        var bottomBluePixels = 0
+        
         let step = 4
         var sampledTotal = 0
+        var sampledTop = 0
+        var sampledBottom = 0
         
-        for y in stride(from: 0, to: height, by: step) {
-            for x in stride(from: 0, to: width, by: step) {
-                let offset = y * bytesPerRow + x * 4
-                // Formato garantito RGBA: offset=R, +1=G, +2=B, +3=A
-                let r = CGFloat(pixels[offset])     / 255.0
-                let g = CGFloat(pixels[offset + 1]) / 255.0
-                let b = CGFloat(pixels[offset + 2]) / 255.0
-                
-                let hsv = rgbToHsv(r: r, g: g, b: b)
-                
-                if hsv.h >= Thresholds.minHue && hsv.h <= Thresholds.maxHue &&
-                   hsv.s >= Thresholds.minSaturation && hsv.v >= Thresholds.minValue {
-                    bluePixels += 1
+        let topBoundary = Int(Double(height) * 0.10)
+        let bottomBoundary = Int(Double(height) * 0.90)
+        
+        // Ottimizzazione: accesso diretto ai pixel come puntatori per massimizzare la velocità
+        pixels.withUnsafeBufferPointer { ptr in
+            for y in stride(from: 0, to: height, by: step) {
+                let rowOffset = y * bytesPerRow
+                for x in stride(from: 0, to: width, by: step) {
+                    let offset = rowOffset + x * 4
+                    let rVal = ptr[offset]
+                    let gVal = ptr[offset + 1]
+                    let bVal = ptr[offset + 2]
+                    
+                    // Dominanza Blu Rapida (Security/Performance: primo filtro veloce)
+                    // Il blu deve essere significativamente superiore agli altri canali
+                    guard bVal > 40 && bVal > rVal && bVal > gVal else {
+                        sampledTotal += 1
+                        if y < topBoundary { sampledTop += 1 }
+                        if y > bottomBoundary { sampledBottom += 1 }
+                        continue
+                    }
+                    
+                    let r = CGFloat(rVal) / 255.0
+                    let g = CGFloat(gVal) / 255.0
+                    let b = CGFloat(bVal) / 255.0
+                    
+                    let hsv = rgbToHsv(r: r, g: g, b: b)
+                    
+                    let isInHue = hsv.h >= Thresholds.minHue && hsv.h <= Thresholds.maxHue
+                    let isSaturated = hsv.s >= Thresholds.minSaturation
+                    let isBright = hsv.v >= Thresholds.minValue
+                    
+                    // Dominanza Blu (Elimina grigi, viola e azzurrini spuri)
+                    let isBlueDominant = (Float(bVal) > Float(rVal) * 1.4) && (Float(bVal) > Float(gVal) * 1.4)
+                    
+                    if isInHue && isSaturated && isBright && isBlueDominant {
+                        totalBluePixels += 1
+                        if y < topBoundary { topBluePixels += 1 }
+                        if y > bottomBoundary { bottomBluePixels += 1 }
+                    }
+                    
+                    sampledTotal += 1
+                    if y < topBoundary { sampledTop += 1 }
+                    if y > bottomBoundary { sampledBottom += 1 }
                 }
-                sampledTotal += 1
             }
         }
         
-        let blueRatio = Double(bluePixels) / Double(sampledTotal)
+        let blueRatio = Double(totalBluePixels) / Double(sampledTotal)
+        let topRatio = sampledTop > 0 ? Double(topBluePixels) / Double(sampledTop) : 0
+        let bottomRatio = sampledBottom > 0 ? Double(bottomBluePixels) / Double(sampledBottom) : 0
         
-        if blueRatio > Thresholds.bluePixelPercentage {
-            let hasText = hasCenterWhiteText(pixels: pixels, width: width, height: height, bytesPerRow: bytesPerRow)
-            if hasText {
-                print("DEBUG: Schermata blu rilevata! BlueRatio: \(String(format: "%.2f", blueRatio))")
-                return true
-            } else {
-                print("DEBUG: BlueRatio \(String(format: "%.2f", blueRatio)) > soglia, ma testo non rilevato.")
-            }
+        if blueRatio > Thresholds.bluePixelPercentage && topRatio > 0.3 && bottomRatio > 0.3 {
+            return hasCenterWhiteText(pixels: pixels, width: width, height: height, bytesPerRow: bytesPerRow)
         }
         
         return false
@@ -95,7 +125,6 @@ struct VideoAnalyzer {
     
     /// Verifica se c'è una regione luminosa (testo bianco) nel centro dell'immagine.
     private static func hasCenterWhiteText(pixels: [UInt8], width: Int, height: Int, bytesPerRow: Int) -> Bool {
-        // Rettangolo centrale: testo "INFO DAY KREATIVEU" è nel terzo sinistro-centrale
         let cxStart = Int(Double(width) * 0.1)
         let cxEnd   = Int(Double(width) * 0.8)
         let cyStart = Int(Double(height) * 0.30)
@@ -104,25 +133,27 @@ struct VideoAnalyzer {
         var brightPixels = 0
         var monitoredPixels = 0
         
-        for y in stride(from: cyStart, to: cyEnd, by: 3) {
-            for x in stride(from: cxStart, to: cxEnd, by: 3) {
-                let offset = y * bytesPerRow + x * 4
-                let r = CGFloat(pixels[offset])     / 255.0
-                let g = CGFloat(pixels[offset + 1]) / 255.0
-                let b = CGFloat(pixels[offset + 2]) / 255.0
-                
-                if r > Thresholds.whiteTextBrightness &&
-                   g > Thresholds.whiteTextBrightness &&
-                   b > Thresholds.whiteTextBrightness {
-                    brightPixels += 1
+        pixels.withUnsafeBufferPointer { ptr in
+            for y in stride(from: cyStart, to: cyEnd, by: 3) {
+                let rowOffset = y * bytesPerRow
+                for x in stride(from: cxStart, to: cxEnd, by: 3) {
+                    let offset = rowOffset + x * 4
+                    let r = CGFloat(ptr[offset])     / 255.0
+                    let g = CGFloat(ptr[offset + 1]) / 255.0
+                    let b = CGFloat(ptr[offset + 2]) / 255.0
+                    
+                    if r > Thresholds.whiteTextBrightness &&
+                       g > Thresholds.whiteTextBrightness &&
+                       b > Thresholds.whiteTextBrightness {
+                        brightPixels += 1
+                    }
+                    monitoredPixels += 1
                 }
-                monitoredPixels += 1
             }
         }
         
-        let whiteRatio = Double(brightPixels) / Double(monitoredPixels)
-        print("DEBUG: WhiteRatio nel centro = \(String(format: "%.4f", whiteRatio))")
-        return whiteRatio > 0.005 // 0.5% di pixels chiari nel centro è sufficiente perché il font è sottile
+        let whiteRatio = monitoredPixels > 0 ? Double(brightPixels) / Double(monitoredPixels) : 0
+        return whiteRatio > 0.005 
     }
     
     /// Helper per convertire RGB in HSV.
