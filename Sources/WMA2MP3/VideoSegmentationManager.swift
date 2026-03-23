@@ -206,6 +206,10 @@ final class VideoSegmentationManager {
     }
 
     /// Taglia il video in segmenti usando ffmpeg in modo sicuro.
+    /// MIGLIORAMENTI SICUREZZA E ROBUSTEZZA:
+    /// - Argomenti passati come array (Safe Process Invocation) contro shell injection.
+    /// - Timeout di sicurezza di 10 minuti per segmento per evitare processi zombie.
+    /// - Filtraggio log per mantenere l'interfaccia reattiva.
     private func cutSegments(sourceURL: URL, segments: [(start: Double, end: Double)]) async {
         let ffmpegPath = Bundle.main.path(forResource: "ffmpeg", ofType: nil) ?? "/usr/local/bin/ffmpeg"
         

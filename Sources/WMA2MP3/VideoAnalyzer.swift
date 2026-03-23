@@ -50,6 +50,10 @@ struct VideoAnalyzer {
     }
 
     /// Analizza un'immagine per determinare se è una schermata blu di delimitazione.
+    /// IMPLEMENTAZIONE OTTIMIZZATA:
+    /// 1. Usa pointer diretti ai pixel per evitare overhead di copia.
+    /// 2. Applica 'Blue Dominance' per filtrare falsi positivi (es. vestiti azzurri).
+    /// 3. Verifica uniformità verticale (Top/Bottom 10%) per garantire che sia una schermata a pieno schermo.
     static func isBlueScreen(_ image: CGImage) -> Bool {
         guard let (pixels, width, height, bytesPerRow) = normalizeToRGBA(image) else {
             return false
