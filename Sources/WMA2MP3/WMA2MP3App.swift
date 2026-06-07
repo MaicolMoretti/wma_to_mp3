@@ -6,11 +6,15 @@ struct WMA2MP3App: App {
     @State private var manager = ConversionManager()
     
     init() {
-        // Request notification permissions
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
-            if let error = error {
-                print("Notification authorization error: \(error)")
+        // Request notification permissions only if we are running from a bundled app with an ID
+        if Bundle.main.bundleIdentifier != nil {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+                if let error = error {
+                    print("Notification authorization error: \(error)")
+                }
             }
+        } else {
+            print("Running without a bundle identifier: Skipping notification authorization.")
         }
     }
     
