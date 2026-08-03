@@ -29,7 +29,7 @@ Questo progetto utilizza Swift Package Manager combinato con un `Makefile` legge
    ```bash
    make run
    ```
-.
+
 ## Sviluppo e Test
 Per eseguire la suite di test automatizzati XCTest che copre la logica di deduplicazione e le operazioni sui file:
 
