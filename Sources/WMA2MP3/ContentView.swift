@@ -1,11 +1,16 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Interfaccia della coda di conversione: selezione, stato dei file e comandi del lotto.
 struct ContentView: View {
+    /// Manager condiviso ricevuto dall'ambiente dell'app.
     @Environment(ConversionManager.self) private var manager
+    /// Preferenze persistenti applicate all'avvio della conversione.
     @State private var settings = AppSettings()
+    /// Evidenzia la zona quando il puntatore trascina file compatibili.
     @State private var isTargeted = false
     
+    /// Alterna la zona vuota e la tabella in base al contenuto della coda.
     var body: some View {
         VStack(spacing: 0) {
             if manager.files.isEmpty {
@@ -16,8 +21,10 @@ struct ContentView: View {
             }
         }
         .frame(minWidth: 500, minHeight: 400)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.72))
     }
     
+    /// Zona iniziale per trascinare file o aprire il selettore di macOS.
     @ViewBuilder
     private var emptyDropZone: some View {
         VStack(spacing: 20) {
@@ -55,6 +62,7 @@ struct ContentView: View {
         }
     }
     
+    /// Tabella riepilogativa dei file selezionati e dei rispettivi stati.
     @ViewBuilder
     private var fileList: some View {
         Table(manager.files) {
@@ -86,6 +94,7 @@ struct ContentView: View {
         }
     }
     
+    /// Rappresentazione testuale o grafica dello stato di un singolo file.
     @ViewBuilder
     private func statusView(for file: AudioFile) -> some View {
         switch file.state {
@@ -109,6 +118,7 @@ struct ContentView: View {
         }
     }
     
+    /// Barra con avanzamento globale e azioni contestuali della coda.
     @ViewBuilder
     private var bottomBar: some View {
         VStack(spacing: 12) {
@@ -160,8 +170,9 @@ struct ContentView: View {
         .background(Color(NSColor.windowBackgroundColor))
     }
     
-    // MARK: - Actions
+    // MARK: - Azioni
     
+    /// Decodifica gli URL trascinati e aggiunge soltanto estensioni audio supportate.
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         let supportedExtensions = ["wma", "mp3", "m4a", "wav", "aac", "flac"]
         for provider in providers {
@@ -184,6 +195,7 @@ struct ContentView: View {
         return true
     }
     
+    /// Mostra il pannello nativo per selezionare uno o più file audio.
     private func selectFiles() {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -207,10 +219,10 @@ struct ContentView: View {
         }
     }
     
+    /// Rivela nel Finder tutti gli MP3 prodotti correttamente.
     private func revealDoneFiles() {
         let doneUrls = manager.files.filter({ $0.state == .done }).compactMap({ $0.destinationURL })
         guard !doneUrls.isEmpty else { return }
         NSWorkspace.shared.activateFileViewerSelecting(doneUrls)
     }
 }
-

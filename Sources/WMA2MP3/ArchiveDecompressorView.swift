@@ -1,11 +1,16 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Flusso grafico completo per selezionare, estrarre e riepilogare più archivi.
 struct ArchiveDecompressorView: View {
+    /// Manager locale che conserva coda, avanzamento e risultati.
     @State private var manager = DecompressorManager()
+    /// Stato di evidenziazione della zona di trascinamento.
     @State private var isTargeted = false
+    /// Callback usata per tornare al menu principale.
     var onBack: () -> Void
     
+    /// Seleziona la schermata appropriata in base allo stato del manager.
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -27,6 +32,7 @@ struct ArchiveDecompressorView: View {
         }
     }
     
+    /// Intestazione con titolo e comando di navigazione indietro.
     private var header: some View {
         HStack {
             Button(action: onBack) {
@@ -45,10 +51,11 @@ struct ArchiveDecompressorView: View {
         .background(.ultraThinMaterial)
     }
     
+    /// Schermata di selezione degli archivi e della cartella di destinazione.
     @ViewBuilder
     private var selectionScreen: some View {
         VStack(spacing: 30) {
-            // Drop zone
+            // Zona di trascinamento con indicazione dei formati accettati.
             VStack(spacing: 20) {
                 Image(systemName: "doc.zipper")
                     .font(.system(size: 64))
@@ -112,6 +119,7 @@ struct ArchiveDecompressorView: View {
         }
     }
     
+    /// Schermata con archivio corrente, stima, log e annullamento.
     @ViewBuilder
     private var processingScreen: some View {
         VStack(spacing: 30) {
@@ -166,7 +174,7 @@ struct ArchiveDecompressorView: View {
                 .padding()
             }
             .frame(height: 100)
-            .background(Color.black.opacity(0.05))
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.7))
             .cornerRadius(8)
             .padding(.horizontal, 40)
             
@@ -177,6 +185,7 @@ struct ArchiveDecompressorView: View {
         }
     }
     
+    /// Riepilogo finale con statistiche e collegamento al Finder.
     @ViewBuilder
     private var completionScreen: some View {
         VStack(spacing: 20) {
@@ -235,8 +244,9 @@ struct ArchiveDecompressorView: View {
         }
     }
     
-    // MARK: - Actions
+    // MARK: - Azioni
     
+    /// Raccoglie in modo asincrono gli URL trascinati e filtra i formati supportati.
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
         let exts = ["zip", "rar", "7z", "tar", "gz", "bz2", "tgz"]
         var droppedUrls: [URL] = []
@@ -265,11 +275,12 @@ struct ArchiveDecompressorView: View {
         return true
     }
     
+    /// Apre il pannello di selezione multipla degli archivi.
     private func selectFiles() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseDirectories = false
-        // Allow common archive types
+        // Limita il pannello ai formati di archivio più comuni.
         panel.allowedContentTypes = [
             UTType.archive,
             UTType.zip,
@@ -285,6 +296,7 @@ struct ArchiveDecompressorView: View {
         }
     }
     
+    /// Consente di scegliere o creare la cartella che riceverà i file estratti.
     private func selectOutputFolder() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true

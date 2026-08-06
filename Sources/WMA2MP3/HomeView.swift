@@ -1,21 +1,28 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// Contenitore principale che instrada l'utente fra le funzionalità dell'app.
 struct HomeView: View {
+    /// Destinazioni interne disponibili nella finestra principale.
     enum AppSection {
         case home
         case wmaToMp3
         case archiveDecompressor
     }
     
+    /// Sezione attualmente visibile.
     @State private var currentSection: AppSection = .home
+    /// Coordinatore condiviso delle conversioni audio.
     @Environment(ConversionManager.self) private var manager
+    /// Tema effettivo, usato per adattare lo sfondo.
+    @Environment(\.colorScheme) private var colorScheme
     
+    /// Costruisce lo sfondo comune e presenta la sezione selezionata.
     var body: some View {
         ZStack {
-            // Background gradient for a premium feel
+            // Gradiente decorativo adattato al contrasto del tema corrente.
             LinearGradient(
-                gradient: Gradient(colors: [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]),
+                gradient: Gradient(colors: backgroundColors),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -33,9 +40,21 @@ struct HomeView: View {
         .frame(minWidth: 700, minHeight: 500)
         .animation(.spring(), value: currentSection)
     }
+
+    /// Coppia di colori dello sfondo per modalità chiara o scura.
+    private var backgroundColors: [Color] {
+        if colorScheme == .dark {
+            return [
+                Color(red: 0.035, green: 0.055, blue: 0.10),
+                Color(red: 0.10, green: 0.045, blue: 0.14)
+            ]
+        }
+        return [Color.blue.opacity(0.1), Color.purple.opacity(0.1)]
+    }
 }
 
 extension HomeView {
+    /// Menu iniziale con le due funzionalità principali.
     private var mainSelectionMenu: some View {
         VStack(spacing: 30) {
             Text("Benvenuto in WMA2MP3")
@@ -71,6 +90,7 @@ extension HomeView {
         }
     }
     
+    /// Combina intestazione di navigazione e coda del convertitore.
     private var wmaToMp3View: some View {
         VStack(spacing: 0) {
             header(title: "Convertitore WMA to MP3", onBack: { currentSection = .home })
@@ -78,6 +98,7 @@ extension HomeView {
         }
     }
     
+    /// Intestazione riutilizzabile con titolo centrato e pulsante Indietro.
     private func header(title: String, onBack: @escaping () -> Void) -> some View {
         HStack {
             Button(action: onBack) {
@@ -96,15 +117,25 @@ extension HomeView {
     }
 }
 
+/// Scheda interattiva del menu iniziale, animata al passaggio del puntatore.
 struct SelectionCard: View {
+    /// Titolo principale della funzionalità.
     let title: String
+    /// Breve spiegazione visualizzata sotto il titolo.
     let description: String
+    /// Nome SF Symbols dell'icona.
     let icon: String
+    /// Colore distintivo della funzionalità.
     let color: Color
+    /// Azione eseguita al clic.
     let action: () -> Void
     
+    /// Controlla ingrandimento e ombra durante l'hover.
     @State private var isHovering = false
+    /// Permette di regolare superficie, bordo e ombra al tema.
+    @Environment(\.colorScheme) private var colorScheme
     
+    /// Compone icona, testi e animazione della scheda.
     var body: some View {
         Button(action: action) {
             VStack(spacing: 20) {
@@ -134,8 +165,12 @@ struct SelectionCard: View {
             .padding(30)
             .background(
                 RoundedRectangle(cornerRadius: 24)
-                    .fill(Color(NSColor.windowBackgroundColor))
-                    .shadow(color: .black.opacity(isHovering ? 0.15 : 0.05), radius: isHovering ? 20 : 10)
+                    .fill(Color(NSColor.controlBackgroundColor).opacity(colorScheme == .dark ? 0.92 : 1))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24)
+                            .stroke(Color.white.opacity(colorScheme == .dark ? 0.08 : 0), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(isHovering ? 0.3 : 0.16), radius: isHovering ? 20 : 10)
             )
             .scaleEffect(isHovering ? 1.05 : 1.0)
         }

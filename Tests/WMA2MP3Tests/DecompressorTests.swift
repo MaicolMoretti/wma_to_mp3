@@ -1,9 +1,12 @@
 import XCTest
 @testable import WMA2MP3
 
+/// Verifica l'estrazione e la fusione di archivi con file e cartelle omonimi.
 final class DecompressorTests: XCTestCase {
     
+    /// Crea un archivio reale temporaneo contenente i percorsi richiesti dal test.
     func createDummyArchive(named archiveName: String, files: [String], in directory: URL) throws -> URL {
+        // Prepara una struttura indipendente per non contaminare gli altri test.
         let tempFolder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempFolder, withIntermediateDirectories: true)
         
@@ -19,6 +22,7 @@ final class DecompressorTests: XCTestCase {
         let archiveURL = directory.appendingPathComponent(archiveName)
         let process = Process()
         
+        // Seleziona lo strumento di sistema coerente con l'estensione richiesta.
         if archiveName.hasSuffix(".zip") {
             process.executableURL = URL(fileURLWithPath: "/usr/bin/zip")
             process.currentDirectoryURL = tempFolder
@@ -31,6 +35,7 @@ final class DecompressorTests: XCTestCase {
             fatalError("Unsupported test archive format")
         }
         
+        // Attende la conclusione dell'archiviazione prima di eliminare i sorgenti temporanei.
         try process.run()
         process.waitUntilExit()
         try? FileManager.default.removeItem(at: tempFolder)
@@ -38,6 +43,7 @@ final class DecompressorTests: XCTestCase {
         return archiveURL
     }
     
+    /// Controlla conteggi, risoluzione dei duplicati e unione ricorsiva delle sottocartelle.
     func testDecompressorLogic() async throws {
         let testRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: testRoot, withIntermediateDirectories: true)
@@ -58,19 +64,19 @@ final class DecompressorTests: XCTestCase {
         XCTAssertEqual(manager.successCount, 2, "Dovrebbero esserci 2 successi")
         XCTAssertEqual(manager.failureCount, 0, "Non dovrebbero esserci errori")
         
-        // Check files in output directory
+        // Controlla i file presenti nella cartella di destinazione.
         let fm = FileManager.default
         let extractedItems = try fm.contentsOfDirectory(atPath: outputDir.path)
         
-        // file1.txt, file2.txt, file3.txt, file2_(1).txt, folderA
+        // Sono attesi i tre nomi unici, una copia rinominata e `folderA`.
         XCTAssertTrue(extractedItems.contains("file1.txt"))
         XCTAssertTrue(extractedItems.contains("file2.txt"))
         XCTAssertTrue(extractedItems.contains("file3.txt"))
         
-        // Duplicate resolution test
+        // Verifica che il duplicato non abbia sovrascritto il primo file.
         XCTAssertTrue(extractedItems.contains("file2_(1).txt") || extractedItems.contains("file2_1.txt") || fm.fileExists(atPath: outputDir.appendingPathComponent("file2_(1).txt").path), "File duplicato non rinominato correttamente")
         
-        // Subfolders merge test
+        // Verifica che le sottocartelle omonime siano state fuse.
         let folderAPath = outputDir.appendingPathComponent("folderA")
         var isDir: ObjCBool = false
         XCTAssertTrue(fm.fileExists(atPath: folderAPath.path, isDirectory: &isDir) && isDir.boolValue, "folderA non è stata estratta come cartella")

@@ -4,28 +4,39 @@ import Observation
 
 @MainActor
 @Observable
+/// Coordina la coda, l'esecuzione concorrente e l'avanzamento delle conversioni audio.
+/// L'isolamento al `MainActor` rende sicuri gli aggiornamenti osservati dalle viste SwiftUI.
 final class ConversionManager {
+    /// File attualmente presenti nella coda.
     var files: [AudioFile] = []
+    /// Indica se è in esecuzione almeno un lotto di conversione.
     var isConverting: Bool = false
+    /// Avanzamento complessivo normalizzato tra zero e uno.
     var overallProgress: Double = 0.0
     
+    /// Associa ogni file al motore FFmpeg attivo, così da poterlo annullare.
     private var engineTasks: [UUID: FFmpegEngine] = [:]
+    /// Task principale che mantiene in vita il lotto corrente.
     private var conversionTaskGroup: Task<Void, Never>?
     
+    /// Inserisce un file nella coda, ignorando percorsi già presenti.
     func addFile(_ url: URL) {
         guard !files.contains(where: { $0.sourceURL == url }) else { return }
         let newFile = AudioFile(sourceURL: url)
         files.append(newFile)
     }
     
+    /// Rimuove dalla coda il file con l'identificatore indicato.
     func removeFile(_ id: UUID) {
         files.removeAll(where: { $0.id == id })
     }
     
+    /// Elimina dalla lista tutti gli elementi convertiti correttamente.
     func clearDone() {
         files.removeAll(where: { $0.state == .done })
     }
     
+    /// Annulla il lotto e inoltra la richiesta a ogni processo FFmpeg attivo.
     func cancel() {
         conversionTaskGroup?.cancel()
         for engine in engineTasks.values {
@@ -37,14 +48,15 @@ final class ConversionManager {
         updateProgress()
     }
     
+    /// Prepara gli stati della coda e avvia un nuovo lotto con le preferenze correnti.
     func startConversion(settings: AppSettings) {
         guard !files.isEmpty else { return }
         isConverting = true
         
-        // Reset states
+        // Reimposta solo i file non completati, conservando i risultati già prodotti.
         for file in files {
             if file.state == .done || (file.state == .error(message: "") && false) {
-                // Keep done files done, reset errors if needed
+                // I file completati restano tali; il secondo ramo è riservato a future politiche sugli errori.
             } else {
                 file.state = .pending
                 file.errorMessage = nil
@@ -53,6 +65,7 @@ final class ConversionManager {
         
         updateProgress()
         
+        // Il task ad alta priorità esegue il lotto e, al termine, aggiorna UI e notifiche.
         conversionTaskGroup = Task(priority: .userInitiated) {
             await runBatch(settings: settings)
             self.isConverting = false
@@ -63,6 +76,7 @@ final class ConversionManager {
         }
     }
     
+    /// Distribuisce i file pendenti su un numero di task non superiore ai core disponibili.
     private func runBatch(settings: AppSettings) async {
         let maxConcurrent = ProcessInfo.processInfo.activeProcessorCount
         
@@ -82,21 +96,19 @@ final class ConversionManager {
                 }
                 activeTasks += 1
             }
-            // Wait for remaining tasks to complete
+            // Attende anche gli ultimi task rimasti nel gruppo.
             await group.waitForAll()
         }
     }
     
+    /// Converte un singolo file, determina la destinazione e gestisce errori e pulizia.
     private func convertSingle(_ file: AudioFile, settings: AppSettings) async {
         let sourceURL = file.sourceURL
         
-        // Output Directory
+        // Usa la cartella personalizzata oppure quella del file sorgente.
         let outputDir = settings.customOutputFolderURL ?? sourceURL.deletingLastPathComponent()
         
-        // Edge Case: Read-Only output directory? Wait,FileManager attributes can check if writable,
-        // but it's simpler to catch the error from FFmpeg or creating the file.
-        
-        // Edge Case: 0-byte source file
+        // Un file vuoto non è convertibile e viene scartato prima di avviare un processo esterno.
         if file.originalSize == 0 {
             file.state = .error(message: String(localized: "Source file is empty (0 bytes)."))
             return
@@ -104,6 +116,7 @@ final class ConversionManager {
         
         var destURL = outputDir.appendingPathComponent(sourceURL.deletingPathExtension().lastPathComponent).appendingPathExtension("mp3")
         
+        // Evita collisioni quando la sovrascrittura è disabilitata.
         if FileManager.default.fileExists(atPath: destURL.path) && !settings.overwriteExisting {
             destURL = FileHelpers.generateUniqueFilename(for: destURL)
         }
@@ -115,6 +128,7 @@ final class ConversionManager {
             return
         }
         
+        // Registra il motore prima dell'avvio per rendere immediatamente disponibile l'annullamento.
         let engine = FFmpegEngine()
         engineTasks[file.id] = engine
         
@@ -130,7 +144,7 @@ final class ConversionManager {
             }
         } catch {
             file.state = .error(message: error.localizedDescription)
-            // If it failed and we created an empty file, clean it up
+            // Rimuove l'eventuale output incompleto lasciato da una conversione fallita.
             if FileManager.default.fileExists(atPath: destURL.path) {
                 try? FileManager.default.removeItem(at: destURL)
             }
@@ -139,6 +153,7 @@ final class ConversionManager {
         engineTasks.removeValue(forKey: file.id)
     }
     
+    /// Ricalcola la percentuale globale combinando file conclusi e avanzamenti parziali.
     private func updateProgress() {
         let done = files.filter { $0.state == .done }.count
         let error = files.filter { if case .error = $0.state { return true } else { return false }}.count
@@ -166,6 +181,7 @@ final class ConversionManager {
     }
     
     
+    /// Costruisce e invia la notifica macOS con il riepilogo del lotto.
     private func showCompletionNotification() {
         let content = UNMutableNotificationContent()
         content.title = String(localized: "Conversion Complete")

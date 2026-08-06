@@ -1,8 +1,9 @@
 // swift-tools-version: 5.9
-// The swift-tools-version declares the minimum version of Swift required to build this package.
+// La direttiva swift-tools-version dichiara la versione minima di Swift richiesta.
 
 import PackageDescription
 
+// Definisce l'eseguibile macOS e i due target dedicati ai test logici e di interfaccia.
 let package = Package(
     name: "WMA2MP3",
     platforms: [

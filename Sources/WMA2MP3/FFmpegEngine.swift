@@ -1,10 +1,12 @@
 import Foundation
 
+/// Errori specifici prodotti dall'avvio o dall'esecuzione di FFmpeg.
 enum FFmpegError: Error, LocalizedError {
     case binaryNotFound
     case processFailed(Int)
     case cancelled
     
+    /// Messaggio localizzabile presentabile all'utente.
     var errorDescription: String? {
         switch self {
         case .binaryNotFound: return String(localized: "FFmpeg binary not found.")
@@ -14,10 +16,12 @@ enum FFmpegError: Error, LocalizedError {
     }
 }
 
+/// Incapsula un singolo processo FFmpeg e ne serializza l'accesso concorrente.
 actor FFmpegEngine {
+    /// Processo attivo, conservato per poterlo terminare su richiesta.
     private var process: Process?
     
-    /// Prepares arguments and parses progress via stdout/stderr, reporting back via the callback.
+    /// Prepara gli argomenti, esegue FFmpeg e comunica l'avanzamento tramite callback.
     func convert(source: URL, destination: URL, quality: Int, progressHandler: @escaping (Double) -> Void) async throws {
         guard let ffmpegURL = Bundle.main.url(forResource: "ffmpeg", withExtension: nil) else {
             throw FFmpegError.binaryNotFound
@@ -27,9 +31,9 @@ actor FFmpegEngine {
         process = p
         p.executableURL = ffmpegURL
         
-        // ffmpeg -y -i input.wma -codec:a libmp3lame -b:a 192k -map_metadata 0 output.mp3
+        // Compone il comando: sovrascrittura, codec MP3, bitrate scelto e copia dei metadati.
         p.arguments = [
-            "-y", // Overwrite output files
+            "-y", // Consente a FFmpeg di sovrascrivere il percorso già autorizzato dal manager.
             "-i", source.path,
             "-codec:a", "libmp3lame",
             "-b:a", "\(quality)k",
@@ -40,9 +44,8 @@ actor FFmpegEngine {
         let errorPipe = Pipe()
         p.standardError = errorPipe
         
-        // We need to parse duration from stderr first, then time
-        // Example: Duration: 00:03:12.45
-        // Example: size=    3072kB time=00:01:30.12 bitrate= 279.1kbits/s
+        // FFmpeg scrive su stderr prima la durata totale e poi il tempo elaborato corrente.
+        // Esempi: `Duration: 00:03:12.45` e `time=00:01:30.12`.
         
         let fileHandle = errorPipe.fileHandleForReading
         
@@ -51,15 +54,18 @@ actor FFmpegEngine {
         var totalDuration: Double? = nil
         
         for try await line in fileHandle.bytes.lines {
+            // La cancellazione cooperativa termina anche il processo di sistema sottostante.
             if Task.isCancelled {
                 p.terminate()
                 throw FFmpegError.cancelled
             }
             
+            // La durata totale viene acquisita una sola volta dall'intestazione dell'output.
             if totalDuration == nil, let durationStr = extractRegex(pattern: "Duration: ?(\\d+:\\d+:\\d+\\.\\d+)", from: line) {
                 totalDuration = parseTime(durationStr)
             }
             
+            // Il rapporto fra tempo elaborato e durata produce un valore limitato a 0...1.
             if let total = totalDuration, let timeStr = extractRegex(pattern: "time=(\\d+:\\d+:\\d+\\.\\d+)", from: line) {
                 let time = parseTime(timeStr)
                 let progress = min(max(time / total, 0.0), 1.0)
@@ -77,15 +83,17 @@ actor FFmpegEngine {
             throw FFmpegError.processFailed(Int(p.terminationStatus))
         }
         
-        // Ensure 100% on success
+        // Garantisce che la UI raggiunga il 100% anche se manca l'ultima riga di progresso.
         progressHandler(1.0)
         self.process = nil
     }
     
+    /// Termina il processo FFmpeg eventualmente in esecuzione.
     func cancel() {
         process?.terminate()
     }
     
+    /// Restituisce il primo gruppo catturato da un'espressione regolare.
     private func extractRegex(pattern: String, from string: String) -> String? {
         let regex = try? NSRegularExpression(pattern: pattern, options: [])
         let nsString = string as NSString
@@ -94,8 +102,9 @@ actor FFmpegEngine {
         return nsString.substring(with: first.range(at: 1))
     }
     
+    /// Converte una durata `HH:MM:SS.ss` nel numero totale di secondi.
     private func parseTime(_ timeString: String) -> Double {
-        // HH:MM:SS.SS
+        // Le componenti non numeriche vengono trattate come zero in modo difensivo.
         let parts = timeString.split(separator: ":")
         guard parts.count == 3 else { return 0 }
         
