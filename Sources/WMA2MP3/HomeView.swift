@@ -16,29 +16,57 @@ struct HomeView: View {
     @Environment(ConversionManager.self) private var manager
     /// Tema effettivo, usato per adattare lo sfondo.
     @Environment(\.colorScheme) private var colorScheme
+    /// Preferenza persistente modificata dal menu rapido del tema.
+    @AppStorage("appAppearance") private var appAppearance = AppAppearance.dark.rawValue
     
     /// Costruisce lo sfondo comune e presenta la sezione selezionata.
     var body: some View {
-        ZStack {
-            // Gradiente decorativo adattato al contrasto del tema corrente.
-            LinearGradient(
-                gradient: Gradient(colors: backgroundColors),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
-            switch currentSection {
-            case .home:
-                mainSelectionMenu
-            case .wmaToMp3:
-                wmaToMp3View
-            case .archiveDecompressor:
-                ArchiveDecompressorView(onBack: { currentSection = .home })
+        VStack(spacing: 0) {
+            themeBar
+
+            ZStack {
+                // Gradiente decorativo adattato al contrasto del tema corrente.
+                LinearGradient(
+                    gradient: Gradient(colors: backgroundColors),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
+
+                switch currentSection {
+                case .home:
+                    mainSelectionMenu
+                case .wmaToMp3:
+                    wmaToMp3View
+                case .archiveDecompressor:
+                    ArchiveDecompressorView(onBack: { currentSection = .home })
+                }
             }
         }
         .frame(minWidth: 700, minHeight: 500)
         .animation(.spring(), value: currentSection)
+    }
+
+    /// Barra permanente con tre pulsanti testuali per la selezione del tema.
+    private var themeBar: some View {
+        HStack(spacing: 12) {
+            Spacer()
+
+            Label("Tema", systemImage: "circle.lefthalf.filled")
+                .font(.callout.weight(.semibold))
+
+            Picker("Tema", selection: $appAppearance) {
+                ForEach(AppAppearance.allCases) { appearance in
+                    Text(appearance.title).tag(appearance.rawValue)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 230)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
     }
 
     /// Coppia di colori dello sfondo per modalità chiara o scura.

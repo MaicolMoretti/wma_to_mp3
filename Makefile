@@ -11,6 +11,10 @@ FFMPEG_URL = https://evermeet.cx/ffmpeg/getrelease/zip
 FFMPEG_ZIP = $(BUILD_DIR)/ffmpeg.zip
 FFMPEG_BIN = Sources/WMA2MP3/Resources/ffmpeg
 
+# Questi nomi rappresentano azioni e devono essere eseguiti anche se esistono
+# file o cartelle omonimi, come la directory `build` del bundle finale.
+.PHONY: all clean init_ffmpeg build app_bundle run test
+
 all: init_ffmpeg build app_bundle
 
 clean:
