@@ -9,7 +9,7 @@ Un'applicazione desktop nativa per macOS, pronta all'uso, per convertire file Wi
 - **Elaborazione Batch**: Converti più file contemporaneamente.
 - **Background Conversion**: L'interfaccia rimane fluida e non si blocca mai durante la conversione.
 - **Controllo della Qualità**: Qualità di output personalizzabili (128, 192, 256, 320 kbps).
-- **Metadati**: Preserva automaticamente i tag ID3.
+- **Metadati**: Preserva automaticamente i tag ID3..
 
 ## Requisiti
 - macOS 14.0 o successivo (Sonoma+)
